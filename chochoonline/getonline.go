@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/html"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"time"
 )
-import "golang.org/x/net/html"
 
 type onlineUsers struct {
 	Names []string
@@ -67,13 +67,13 @@ func extractPageFromPagination(n *html.Node) int {
 	return 0
 }
 
-func paginationSearch(n *html.Node) int {
+func getLastPageFromHtml(n *html.Node) int {
 	if n.Type == html.ElementNode && n.Data == "ul" && nodeHasClass(n, "paging") {
 		return extractPageFromPagination(n)
 	}
 
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		result := paginationSearch(c)
+		result := getLastPageFromHtml(c)
 		if result > 0 {
 			return result
 		}
@@ -83,15 +83,15 @@ func paginationSearch(n *html.Node) int {
 }
 
 
-func getTotalPages(cat string, downloader Downloader) int {
-	body := downloader(fmt.Sprintf(getConfig().UrlTemplate, cat))
+func getTotalPages(cat string, downloader Downloader, cfg config) int {
+	body := downloader(fmt.Sprintf(cfg.UrlTemplate, cat))
 	n, err := html.Parse(strings.NewReader(body))
 
 	if err != nil {
 		log.Fatalln("Failed to parse body", err)
 	}
 
-	return paginationSearch(n)
+	return getLastPageFromHtml(n)
 }
 
 func nodeHasClass(n *html.Node, cls string) bool {
@@ -131,7 +131,8 @@ func getAttrByKeyFromToken(token *html.Tokenizer, key string) string {
 	return ""
 }
 
-func nameSearch(nc chan string, token *html.Tokenizer){
+// getTitlesFromTokenizer - collect titles from web page
+func getTitlesFromTokenizer(nc chan string, token *html.Tokenizer){
 	var lastDivWasTitle bool
 
 	for {
@@ -160,20 +161,22 @@ func nameSearch(nc chan string, token *html.Tokenizer){
 	}
 }
 
-func getNamesFromPage(cat string, page int, downloader Downloader, nc chan string, done chan bool){
-	body := downloader(fmt.Sprintf(getConfig().UrlTemplate, cat, page))
+// getNamesFromPage - download single page and pass it to parser
+func getNamesFromPage(cat string, cfg config, page int, downloader Downloader, nc chan string, done chan bool){
+	body := downloader(fmt.Sprintf(cfg.UrlTemplate, cat, page))
 	tok := html.NewTokenizer(strings.NewReader(body))
 
-	nameSearch(nc, tok)
+	getTitlesFromTokenizer(nc, tok)
 	done <- true
 }
 
-func getNames(o *onlineUsers, downloader Downloader, cat string, firstPage, lastPage int){
+// getNames - spawn goroutines to collect titles from individual pages
+func getNames(o *onlineUsers, cfg config, downloader Downloader, cat string, firstPage, lastPage int){
 	ch := make(chan string)
 	done := make(chan bool)
 
 	for firstPage < lastPage+1 {
-		go getNamesFromPage(cat, firstPage, downloader, ch, done)
+		go getNamesFromPage(cat, cfg, firstPage, downloader, ch, done)
 		firstPage++
 	}
 
@@ -195,11 +198,12 @@ func getNames(o *onlineUsers, downloader Downloader, cat string, firstPage, last
 	}
 }
 
+// onlineByType - split app in 2 different paths.
+// 1. Collect information about how many pages are there
+// 2. Collect titles from all pages in category
 func onlineByType(o *onlineUsers, cat string) {
-	currentPage := 1
-	pages := getTotalPages(cat, httpGet)
-
-	getNames(o, httpGet, cat, currentPage, pages)
+	pages := getTotalPages(cat, httpGet, getConfig())
+	getNames(o, getConfig(), httpGet, cat, 1, pages)
 }
 
 func getConfig() config {
@@ -208,6 +212,7 @@ func getConfig() config {
 	if err != nil {
 		log.Fatalln("Failed to open config.", err)
 	}
+	defer fl.Close()
 
 	cfg := config{}
 	data, err := ioutil.ReadAll(fl)

@@ -179,8 +179,8 @@ func Test_paginationSearch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := paginationSearch(tt.args.n); got != tt.want {
-				t.Errorf("paginationSearch() = %v, want %v", got, tt.want)
+			if got := getLastPageFromHtml(tt.args.n); got != tt.want {
+				t.Errorf("getLastPageFromHtml() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -207,7 +207,7 @@ func Test_nameSearch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			go nameSearch(tt.args.nc, tt.args.token)
+			go getTitlesFromTokenizer(tt.args.nc, tt.args.token)
 
 			var bin []string
 			for range tt.want {
@@ -216,14 +216,14 @@ func Test_nameSearch(t *testing.T) {
 			}
 
 			if len(bin) != len(tt.want) {
-				t.Errorf("nameSearch() = %v, want %v", bin, tt.want)
+				t.Errorf("getTitlesFromTokenizer() = %v, want %v", bin, tt.want)
 			}
 
 			sort.Strings(bin)
 
 			for i := range tt.want {
 				if tt.want[i] != bin[i] {
-					t.Errorf("nameSearch() = %v, want %v", bin, tt.want)
+					t.Errorf("getTitlesFromTokenizer() = %v, want %v", bin, tt.want)
 				}
 			}
 		})
@@ -233,6 +233,7 @@ func Test_nameSearch(t *testing.T) {
 func Test_getNames(t *testing.T) {
 	type args struct {
 		o          *onlineUsers
+		cfg        config
 		downloader Downloader
 		cat        string
 		firstPage  int
@@ -250,15 +251,15 @@ func Test_getNames(t *testing.T) {
 		args args
 		want []string
 	}{
-		{"Collect names", args{&ou, downloader, "", 1, 1}, []string{"test1", "test2", "test3"}},
+		{"Collect names", args{&ou, config{}, downloader, "", 1, 1}, []string{"test1", "test2", "test3"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			getNames(tt.args.o, tt.args.downloader, tt.args.cat, tt.args.firstPage, tt.args.lastPage)
+			getNames(tt.args.o, tt.args.cfg, tt.args.downloader, tt.args.cat, tt.args.firstPage, tt.args.lastPage)
 
 			for i := range tt.want {
 				if tt.want[i] != tt.args.o.Names[i] {
-					t.Errorf("nameSearch() = %v, want %v", tt.args.o.Names, tt.want)
+					t.Errorf("getTitlesFromTokenizer() = %v, want %v", tt.args.o.Names, tt.want)
 				}
 			}
 		})
