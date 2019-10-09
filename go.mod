@@ -1,4 +1,4 @@
-module vegasq/chocho
+module github.com/vegasq/chocho
 
 go 1.13
 

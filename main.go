@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"vegasq/chocho/chochoonline"
+	"github.com/vegasq/chocho/chochoonline"
 )
 
 
